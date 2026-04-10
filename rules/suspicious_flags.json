@@ -1,0 +1,15 @@
+{
+    "powershell.exe" : [
+        "-EncodedCommand",
+        "-E",
+        "-ExecutionPolicy Bypass",
+        "-EP Bypass",
+        "-WindowStyle Hidden",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Version 2"
+    ],
+    "cmd.exe" : [
+        "/c"
+    ]
+}

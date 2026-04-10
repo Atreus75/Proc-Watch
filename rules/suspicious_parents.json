@@ -1,0 +1,21 @@
+{
+    "SuspiciousTerminalParents" : [
+        "winword.exe",
+        "excel.exe",
+        "svchost.exe",
+        "notepad.exe",
+        "wscript.exe",
+        "csript.exe",
+        "mshta.exe",
+        "regsvr32.exe",
+        "chrome.exe",
+        "firefox.exe",
+        "msedge.exe",
+        "outlook.exe",
+        "powershell.exe"
+    ],
+    "GeneralSuspiciousParents" : [
+        "powershell.exe",
+        "cmd.exe"
+    ]
+}

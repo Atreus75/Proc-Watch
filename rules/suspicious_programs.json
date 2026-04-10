@@ -1,0 +1,12 @@
+{
+    "Suspicious": [
+        "powershell.exe",
+        "cmd.exe"
+    ],
+    "MostSuspicious": {
+        "Terminals": [
+            "powershell.exe",
+            "cmd.exe"
+        ]
+    }
+}
