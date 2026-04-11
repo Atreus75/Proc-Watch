@@ -15,35 +15,20 @@ suspicious_flags_file.close()
 suspicious_programs_file.close()
 
 class ProcessInfo:
-    def __init__(self, name='', bin_path='', command_line='', pid=0, opening_time='', parent_path='', parent_command_line='', ppid=0):
+    def __init__(self, name='', bin_path='', current_directory='', command_line='', pid=0, opening_time='', parent_path='', parent_command_line='', ppid=0):
         self.name = name
         self.bin_path = bin_path
+        self.current_directory = current_directory
         self.pid = pid
         self.parent_path = parent_path
         self.parent_pid = ppid
         self.command_line = command_line
         self.parent_command_line = parent_command_line
+        self.opening_time = opening_time
 
-        self.suspicious_name = False
-        self.suspicious_parent = False
-        self.suspicious_flags = []
-
-    def checkSuspicious(self):
-        if self.name in suspicious_programs_dict['SuspiciousTerminalParents']:
-            if self.name in suspicious_programs_dict['Most_suspicious']:
-                if self.name in suspicious_programs_dict['MostSuspicious']['Terminals']:
-                    # Detects phishing and macros (Ex: Microsoft Word starting a Powershell process)
-                    for parent in suspicious_parents_dict['SuspiciousTerminalParents']:
-                        self.suspicious_parent = parent if parent in self.parent_path else False
-                    # Detects suspicious flags in the commandline (Ex: encryption, http requests etc)
-                    for flag in suspicious_flags_dict[self.name]:
-                        if flag in self.command_line:
-                            flag.append(flag)
-        elif any([parent in self.parent_path for parent in suspicious_parents_dict['GeneralSuspiciousParents']]):
-            # Checking apparently not-suspicious processes starting by strange parents
-            pass
+        self.flags = []
+        
             
-
 class SysmonMonitor:
     def __init__(self):
         self.event_ids = {
@@ -72,14 +57,15 @@ class SysmonMonitor:
         event_id = int(event_dict['Event']['System']['EventID'])
         if event_id in self.event_ids.keys():
             event_time = event_dict['Event']['System']['TimeCreated']['@SystemTime']
-            print(f'[+] New Event: {self.event_ids[event_id]} {event_time}')
+            print(f'[+] New Event: {self.event_ids[event_id]} at {event_time}')
             match event_id:
                 case 1:
                     process = ProcessInfo(
                         name=event_dict['Event']['EventData']['Data'][9]['#text'],
                         bin_path=event_dict['Event']['EventData']['Data'][4]['#text'],
+                        current_directory=event_dict['Event']['EventData']['Data'][11]['#text'],
                         command_line=event_dict['Event']['EventData']['Data'][10]['#text'],
-                        pid=event_dict['Event']['EventData']['Data'][10]['#text'],
+                        pid=event_dict['Event']['EventData']['Data'][3]['#text'],
                         opening_time=event_dict['Event']['EventData']['Data'][1]['#text'],
                         parent_path=event_dict['Event']['EventData']['Data'][20]['#text'],
                         parent_command_line=event_dict['Event']['EventData']['Data'][21]['#text'],
@@ -87,7 +73,8 @@ class SysmonMonitor:
                     )
 
                     # Proceeds to use SOC rules to detect a malicious context in a process creation
-                    # code here
+                    self.riskChecks(process)
+                    
                     # Printing general logs
                     print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
@@ -96,6 +83,75 @@ class SysmonMonitor:
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                 case _:
                     print(f'[!] Not Identified Event ID: {event_id}')
+            
+
+    def riskChecks(self, process=ProcessInfo()):
+        report_file = open('report.md', 'a+')
+        report_lines = list()
+        
+        risk_score = 0 
+
+        # Checks if its a known risky tool
+        if process.name in suspicious_programs_dict['Names']['Suspicious']+suspicious_programs_dict['Names']['MostSuspicious']['Terminals']+suspicious_programs_dict['Names']['MostSuspicious']['Network']:
+            risk_score += 3
+            report_lines.append(f'* **Suspicious Executable**: \n')
+            report_lines.append(f'* * **{process.name}**: {suspicious_programs_dict["Explainings"][process.name]}\n')
+            # Checks if its a known attack tool
+            if process.name in suspicious_programs_dict['Names']['MostSuspicious']['Terminals'] + suspicious_programs_dict['Names']['MostSuspicious']['Network']:
+                risk_score += 3
+                # Detects suspicious flags in the commandline (Ex: encryption, http request, port opening etc)
+                flags = list()
+                for flag in suspicious_flags_dict['Flags'][process.name]:
+                    if flag in process.command_line:
+                        flags.append(flag)
+                if flags:
+                    risk_score += 3
+                    print('* **Attack Convenient Flags**: ')
+                    for flag in flags:
+                        print(f'* * **{flag}**: {suspicious_flags_dict["Explainings"][process.name][flag]}\n')
+
+            # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
+            for parent in suspicious_parents_dict['SuspiciousParents'] + suspicious_parents_dict['MostSuspiciousParents']:
+                if parent in process.parent_path:
+                    risk_score += 3
+                    report_lines.append('* **Strange Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
+                    report_lines.append(f'* * **Executable**: {parent}\n')
+                    report_lines.append(f'* * **PPID**: {process.parent_pid}\n')
+                    report_lines.append(f'* * **Command Line**: {process.parent_command_line}')
+                    break
+        else:
+            # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
+            for parent in suspicious_parents_dict['MostSuspiciousParents']:
+                if parent in process.parent_path:
+                    risk_score += 3
+                    report_lines.append('* **Suspicious Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
+                    report_lines.append(f'* * **Executable**: {parent}\n')
+                    report_lines.append(f'* * **PPID**: {process.parent_pid}\n')
+                    report_lines.append(f'* * **Command Line**: {process.parent_command_line}')
+                    break
+        if risk_score > 0:
+            report_lines.append('## Conclusion')
+            report_lines.append(f'* **Score**: {risk_score}\n')
+            if risk_score < 4:
+                report_lines.append('Low risk event. It may or not cause real problems.')
+            elif risk_score >= 4:
+                report_lines.append('Medium risk event. It worths a detailed look.')
+            elif risk_score >= 7:
+                report_lines.append('High risk event. This event is very probably an attack trail.')
+            else:
+                report_lines.append('Very high event. It will cause serious problems if ignored. An attack is certainly ocurring right now.')
+            
+
+
+            report_lines.insert(0, f'## Suspicious Activity\n')
+            report_lines.insert(0, f'**Creation Time**: {process.opening_time}\n')
+            report_lines.insert(0, f'**PID**: {process.pid}\n')
+            report_lines.insert(0, f'**Executable:** {process.name}\n')
+            report_lines.insert(0, f'## Main Information:** {process.name}\n')
+            report_lines.insert(0, f'# ⚠️ Suspicious Process Creation\n-------------\n')
+            report_file.writelines(report_lines)
+            report_file.close()
+            
 
 print('''
 ██████╗ ██████╗   ██████╗   ██████╗      ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗
