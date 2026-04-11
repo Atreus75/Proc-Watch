@@ -1,5 +1,5 @@
 {
-    "SuspiciousTerminalParents" : [
+    "SuspiciousParents" : [
         "winword.exe",
         "excel.exe",
         "svchost.exe",
@@ -11,11 +11,12 @@
         "chrome.exe",
         "firefox.exe",
         "msedge.exe",
-        "outlook.exe",
-        "powershell.exe"
+        "outlook.exe"
     ],
-    "GeneralSuspiciousParents" : [
+    "MostSuspiciousParents" : [
         "powershell.exe",
-        "cmd.exe"
+        "cmd.exe",
+        "nc.exe",
+        "nc64.exe"
     ]
 }

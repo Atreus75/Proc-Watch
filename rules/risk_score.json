@@ -1,0 +1,7 @@
+{
+    "Risk_Level" : {
+        "VeryHigh" : 10,
+        "High" : 7,
+        "Medium" : 4
+    }
+}

@@ -1,15 +1,70 @@
 {
-    "powershell.exe" : [
-        "-EncodedCommand",
-        "-E",
-        "-ExecutionPolicy Bypass",
-        "-EP Bypass",
-        "-WindowStyle Hidden",
-        "-NoProfile",
-        "-NonInteractive",
-        "-Version 2"
-    ],
-    "cmd.exe" : [
-        "/c"
-    ]
+    "Flags" : 
+        {
+            "powershell.exe" : [
+                "-EncodedCommand",
+                "-Encryption",
+                "-E",
+                "-ExecutionPolicy Bypass",
+                "-EP Bypass",
+                "-WindowStyle Hidden",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Version 2"
+            ],
+            "cmd.exe" : [
+                "/c"
+            ],
+            "nc.exe" : [
+                "-e",
+                "-l",
+                "-lvp",
+                "-lp"
+            ],
+            "nc64.exe" : [
+                "-e",
+                "-l",
+                "-lvp",
+                "-lp"
+            ],
+            "nmap.exe" : [
+                "-p",
+                "-sV",
+                "-O"
+            ]
+    
+    },
+    "Explainings" : {
+            "powershell.exe" : {
+                "-EncodedCommand" : "Encode a command with some encoding algoritm.",
+                "-Encryption" : "Encrypts the whole script.",
+                "-E" : "Encrypts the whole script.",
+                "-ExecutionPolicy Bypass" : "Bypasses the execution policy.",
+                "-EP Bypass" : "Bypasses the execution policy",
+                "-WindowStyle Hidden" : "Hides the program window in order to increase stealth.",
+                "-NoProfile" : "Uses no profile.",
+                "-NonInteractive" : "Blocks any user interactivity in order to increase stealth and harder to stop.",
+                "-Version 2" : "Uses an old version"
+            },
+            "cmd.exe" : {
+                "/c" : "Executes a specific script after starting the process."
+            },
+            "nc.exe" : {
+                "-e" : "Executes programs in the local machine after a successfull connection with an attacker, giving I/O access.",
+                "-l" : "Opens and listens to a local port, waiting for a connection.",
+                "-lvp" : "Listens to a port (specified by 'p') and allows verbose output.",
+                "-lp" : "Listens to a port (specified by 'p')"
+            },
+            "nc64.exe" : {
+                "-e" : "Executes programs in the local machine after a successfull connection with an attacker, giving I/O access.",
+                "-l" : "Opens and listens to a local port, waiting for a connection.",
+                "-lvp" : "Listens to a port (specified by 'p') and allows verbose output.",
+                "-lp" : "Listens to a port (specified by 'p')"
+            },
+            "nmap.exe" : {
+                "-p" : "Specify the ports to scan",
+                "-sV" : "Scans the services running at a target machine's ports, and its versions.",
+                "-O" : "Scans the operational system running at the target machines."
+            }
+    }
 }
