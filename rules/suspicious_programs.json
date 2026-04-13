@@ -17,7 +17,7 @@
     },
     "Explainings" : {
         "certutil.exe" : "Security certifications installer.",
-        "poewrshell.exe" : "System advanced command prompt. Can be used to run, install and hide malware.",
+        "powershell.exe" : "System advanced command prompt. Can be used to run, install and hide malware.",
         "cmd.exe" : "System command prompt. Can be used to run, install and hide malware.",
         "nmap.exe" : "Port and network scanner. Can be used to map the target machine's network and make lateral movements.",
         "nc.exe" : "TCP connections tool. Can be used to make connections between a victim and the attacker.",

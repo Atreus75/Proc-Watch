@@ -10,7 +10,8 @@
                 "-WindowStyle Hidden",
                 "-NoProfile",
                 "-NonInteractive",
-                "-Version 2"
+                "-Version 2",
+                "-encodedCommand"
             ],
             "cmd.exe" : [
                 "/c"
@@ -38,6 +39,7 @@
             "powershell.exe" : {
                 "-EncodedCommand" : "Encode a command with some encoding algoritm.",
                 "-Encryption" : "Encrypts the whole script.",
+                "-encodedCommand" : "Encryptis the whole script output",
                 "-E" : "Encrypts the whole script.",
                 "-ExecutionPolicy Bypass" : "Bypasses the execution policy.",
                 "-EP Bypass" : "Bypasses the execution policy",
