@@ -1,0 +1,15 @@
+{
+    "Users" : {
+        "Privileged" : [
+            "system",
+            "administrator",
+            "administrador"
+        ]
+    },
+    "Groups" : {
+        "Privileged" : [
+            "administradores",
+            "administrators"
+        ]
+    }
+}

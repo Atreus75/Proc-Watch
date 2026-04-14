@@ -1,0 +1,27 @@
+{
+    "Names" : {
+        "Suspicious": [
+            "certutil.exe"
+        ],
+        "MostSuspicious": {
+            "Terminals": [
+                "powershell.exe",
+                "cmd.exe"
+            ],
+            "Network" : [
+                "nmap.exe",
+                "nc.exe",
+                "nc64.exe"
+            ]
+        }
+    },
+    "Explainings" : {
+        "certutil.exe" : "Security certifications installer.",
+        "powershell.exe" : "System advanced command prompt. Can be used to run, install and hide malware.",
+        "cmd.exe" : "System command prompt. Can be used to run, install and hide malware.",
+        "nmap.exe" : "Port and network scanner. Can be used to map the target machine's network and make lateral movements.",
+        "nc.exe" : "TCP connections tool. Can be used to make connections between a victim and the attacker.",
+        "nc64.exe" : "TCP connections tool. Can be used as to make connections between a victim and the attacker."
+    }
+    
+}
