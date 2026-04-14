@@ -1,7 +1,3 @@
-Aqui vai uma versão mais direta, com tom firme e menos “robótico”:
-
----
-
 # 🛡️ ProcWatch
 
 Monitor de processos em tempo real baseado em eventos do Sysmon, com foco em detecção de comportamento suspeito.
