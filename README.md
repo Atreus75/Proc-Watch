@@ -1,90 +1,92 @@
 # 🛡️ ProcWatch
 
-Monitor de processos em tempo real baseado em eventos do Sysmon, com foco em detecção de comportamento suspeito.
+Real-time process monitoring tool based on Sysmon events, focused on detecting suspicious behavior.
 
 ---
 
-## Visão geral
+## Overview
 
-O ProcWatch acompanha a criação de processos no Windows e aplica regras heurísticas para identificar possíveis atividades maliciosas.
+ProcWatch listens to Windows Sysmon logs and analyzes process creation events to identify potentially malicious activity.
 
-A ideia é simples: observar o que está rodando, entender o contexto e atribuir risco.
-
----
-
-## Como funciona
-
-* Se inscreve no log do Sysmon (`Microsoft-Windows-Sysmon/Operational`)
-* Captura eventos em tempo real
-* Converte XML → estrutura manipulável
-* Analisa eventos de criação de processos
-* Aplica regras de detecção
-* Gera um score de risco
-* Registra tudo em um relatório
+The approach is straightforward: observe process execution, evaluate context, and assign a risk score.
 
 ---
 
-## O que ele analisa
+## How it works
 
-### Execução de ferramentas suspeitas
+* Subscribes to Sysmon event log (`Microsoft-Windows-Sysmon/Operational`)
+* Captures events in real time
+* Parses XML into structured data
+* Focuses on process creation events
+* Applies detection rules
+* Assigns a risk score
+* Writes findings to a report file
 
-Detecta uso de binários comuns em ataques (ex: shells, ferramentas de rede, etc).
+---
 
-### Command-line
+## Detection logic
 
-Identifica flags associadas a comportamento ofensivo:
+### Suspicious executables
 
-* execução remota
-* download de payload
-* abertura de portas
+Flags known tools commonly used in offensive operations (e.g., shells, network tools).
 
-### Usuário
+### Command-line analysis
 
-Verifica se o processo foi iniciado por grupos privilegiados.
+Detects flags associated with malicious behavior, such as:
 
-### Relação pai-filho
+* remote execution
+* payload download
+* port exposure
 
-Detecta cadeias anômalas, tipo:
+### Privileged users
+
+Checks if the process was started by high-privilege groups.
+
+### Parent-child relationships
+
+Detects anomalous chains like:
 
 ```
 winword.exe → powershell.exe
 ```
 
----
-
-## Risk score
-
-Cada evento recebe uma pontuação baseada no contexto:
-
-* **1–3** → incomum
-* **4–6** → suspeito
-* **7–9** → malicioso
-* **10+** → indicativo de ataque
+Typical indicator of macro-based or indirect execution.
 
 ---
 
-## Saída
+## Risk scoring
 
-Os eventos relevantes são registrados em `report.md`, com:
+Each event is scored based on context:
 
-* Informações do processo
-* Motivos da detecção
-* Classificação de risco
-
----
-
-## Estrutura de regras
-
-O comportamento do sistema é controlado por JSONs:
-
-* `programs.json` → executáveis relevantes
-* `flags.json` → argumentos suspeitos
-* `parents.json` → relações anômalas
-* `users_and_groups.json` → grupos privilegiados
+* **1–3** → uncommon
+* **4–6** → suspicious
+* **7–9** → malicious
+* **10+** → strong attack indicator
 
 ---
 
-## Stack
+## Output
+
+Relevant events are written to `report.md`, including:
+
+* Process details
+* Detection reasons
+* Risk classification
+
+---
+
+## Rule system
+
+Detection behavior is driven by JSON files:
+
+* `programs.json` → monitored executables
+* `flags.json` → suspicious arguments
+* `parents.json` → anomalous relationships
+* `users_and_groups.json` → privileged groups
+
+---
+
+## Tech stack
 
 * Python
 * Sysmon
@@ -93,7 +95,7 @@ O comportamento do sistema é controlado por JSONs:
 
 ---
 
-## Execução
+## Usage
 
 ```bash
 python procwatch.py
@@ -101,11 +103,11 @@ python procwatch.py
 
 ---
 
-## Objetivo
+## Purpose
 
-Projeto de estudo focado em:
+This project demonstrates:
 
-* detecção comportamental
-* análise de processos
-* lógica de SOC
-* visão prática de defesa
+* behavioral detection
+* process monitoring
+* SOC-oriented thinking
+* practical defensive security concepts
