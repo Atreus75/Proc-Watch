@@ -2,10 +2,11 @@ import win32evtlog
 import xmltodict
 from json import load
 import time
-
+from subprocess import run
+from argparse import ArgumentParser
 
 class ProcessInfo:
-    def __init__(self, name='', bin_path='', current_directory='', command_line='', pid=0, opening_time='', parent_path='', parent_command_line='', ppid=0):
+    def __init__(self, name='', bin_path='', current_directory='', command_line='', pid=0, opening_time='', user='', parent_path='', parent_command_line='', ppid=0):
         self.name = name
         self.bin_path = bin_path
         self.current_directory = current_directory
@@ -14,29 +15,40 @@ class ProcessInfo:
         self.parent_pid = ppid
         self.command_line = command_line
         self.parent_command_line = parent_command_line
+        self.parent_name = ''
+        for char in parent_path[::-1]:
+            if char == '\\':
+                break
+            self.parent_name += char
+        self.parent_name = self.parent_name[::-1]
         self.opening_time = opening_time
-
+        self.user = user[user.find('\\')+1:]
         self.flags = []
-        
-            
+
+
 class SysmonMonitor:
-    def __init__(self):
+    def __init__(self, report_path=''):
+        self.report_path = report_path
         self.event_ids = {
             1: 'Process Create',
             2: 'File Creation Time Modification',
             5: 'Process Terminated'
         }
         self.query = "*"
+        
         # Opening rule files
-        suspicious_parents_file = open('./rules/suspicious_parents.json', 'r')
-        suspicious_flags_file = open('./rules/suspicious_flags.json', 'r')
-        suspicious_programs_file = open('./rules/suspicious_programs.json', 'r')
-        self.suspicious_parents_dict = load(suspicious_parents_file)
-        self.suspicious_flags_dict = load(suspicious_flags_file)
-        self.suspicious_programs_dict = load(suspicious_programs_file)
-        suspicious_parents_file.close()
-        suspicious_flags_file.close()
-        suspicious_programs_file.close()
+        parents_file = open('./rules/parents.json', 'r')
+        flags_file = open('./rules/flags.json', 'r')
+        programs_file = open('./rules/programs.json', 'r')
+        users_and_groups_file = open('./rules/users_and_groups.json')
+        self.parents_dict = load(parents_file)
+        self.flags_dict = load(flags_file)
+        self.programs_dict = load(programs_file)
+        self.users_and_groups_dict = load(users_and_groups_file)
+        parents_file.close()
+        flags_file.close()
+        programs_file.close()
+        users_and_groups_file.close()
 
         # Event subscribing SysmonMonitor.callback as the callback function to the Sysmon event log
         self.subscription = win32evtlog.EvtSubscribe(
@@ -45,7 +57,6 @@ class SysmonMonitor:
             Query=self.query,
             Callback=self.callback
         )
-
 
 
     def callback(self, action, context, event):
@@ -58,7 +69,7 @@ class SysmonMonitor:
         event_id = int(event_dict['Event']['System']['EventID'])
         if event_id in self.event_ids.keys():
             event_time = event_dict['Event']['System']['TimeCreated']['@SystemTime']
-            print(f'[+] New Event: {self.event_ids[event_id]} at {event_time}')
+            print(f'[+] New Event: {self.event_ids[event_id]} at {event_time[:19]}')
             match event_id:
                 case 1:
                     process = ProcessInfo(
@@ -68,11 +79,11 @@ class SysmonMonitor:
                         command_line=event_dict['Event']['EventData']['Data'][10]['#text'],
                         pid=event_dict['Event']['EventData']['Data'][3]['#text'],
                         opening_time=event_dict['Event']['EventData']['Data'][1]['#text'],
+                        user=event_dict['Event']['EventData']['Data'][12]['#text'],
                         parent_path=event_dict['Event']['EventData']['Data'][20]['#text'],
                         parent_command_line=event_dict['Event']['EventData']['Data'][21]['#text'],
                         ppid=event_dict['Event']['EventData']['Data'][19]['#text']
                     )
-
                     # Proceeds to use SOC rules to detect a malicious context in a process creation
                     self.processCreationChecks(process)
                     
@@ -80,7 +91,7 @@ class SysmonMonitor:
                     print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                 case 5:
-                    print(event_dict)
+                    # WIP
                     print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                 case _:
@@ -88,51 +99,65 @@ class SysmonMonitor:
             
 
     def processCreationChecks(self, process=ProcessInfo()):
-        report_file = open('report.md', 'a+')
+        report_file = open(self.report_path, 'a+')
         report_lines = list()
         
         risk_score = 0 
 
         # Checks if its a known risky tool
-        all_suspicious = self.suspicious_programs_dict['Names']['Suspicious']+self.suspicious_programs_dict['Names']['MostSuspicious']['Terminals']+self.suspicious_programs_dict['Names']['MostSuspicious']['Network']
-        most_suspicious = self.suspicious_programs_dict['Names']['MostSuspicious']['Terminals']+self.suspicious_programs_dict['Names']['MostSuspicious']['Network']
-        if process.name in all_suspicious:
+        all_suspicious_programs = self.programs_dict['Names']['Suspicious']+self.programs_dict['Names']['MostSuspicious']['Terminals']+self.programs_dict['Names']['MostSuspicious']['Network']
+        most_suspicious_programs = self.programs_dict['Names']['MostSuspicious']['Terminals']+self.programs_dict['Names']['MostSuspicious']['Network']
+        if process.name in all_suspicious_programs:
             risk_score += 3
             report_lines.append(f'* **Suspicious Executable**: \n')
-            report_lines.append(f'* * **{process.name}**: {self.suspicious_programs_dict["Explainings"][process.name]}\n')
+            report_lines.append(f'  * **{process.name}**: {self.programs_dict["Explainings"][process.name]}\n')
             # Checks if its a known attack tool
-            if process.name in most_suspicious:
+            if process.name in most_suspicious_programs:
                 risk_score += 3
                 # Detects suspicious flags in the commandline (Ex: encryption, http request, port opening etc)
                 flags = list()
-                for flag in self.suspicious_flags_dict['Flags'][process.name]:
+                for flag in self.flags_dict['Flags'][process.name]:
                     if flag in process.command_line:
                         flags.append(flag)
                 if flags:
                     risk_score += 3
                     report_lines.append('* **Attack Convenient Flags**: \n')
                     for flag in flags:
-                        report_lines.append(f'  * **{flag}**: {self.suspicious_flags_dict["Explainings"][process.name][flag]}\n')
+                        report_lines.append(f'  * **{flag}**: {self.flags_dict["Explainings"][process.name][flag]}\n')
+            
+            # Detects high-autority users spawning processes
+            user_groups = run(
+                [
+                    "powershell", 
+                    "-Command", 
+                    r"Get-LocalGroup | ForEach-Object { $group = $_; Get-LocalGroupMember -Group $group.Name -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*\Lenovo' } | ForEach-Object { $group.Name } } | Select-Object -Unique"
+                ],
+                capture_output=True, text=True
+            ).stdout
+            priviledged_groups = []
+            for group in self.users_and_groups_dict['Groups']['Privileged']:
+                if group.capitalize() in user_groups:
+                    priviledged_groups.append(group)
+                    break
+            if priviledged_groups:
+                risk_score += 3
+                report_lines.append('* **Highly Privileged User Groups**: \n')
+                for group in priviledged_groups:
+                    report_lines.append(f'  * {group.capitalize()}\n')
 
-            # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
-            for parent in self.suspicious_parents_dict['SuspiciousParents'] + self.suspicious_parents_dict['MostSuspiciousParents']:
-                if parent.lower() in process.parent_path.lower():
-                    risk_score += 3
-                    report_lines.append('* **Strange Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
-                    report_lines.append(f'  * **Executable**: {parent}\n')
-                    report_lines.append(f'  * **PPID**: {process.parent_pid}\n')
-                    report_lines.append(f'  * **Command Line**: {process.parent_command_line}\n')
-                    break
-        else:
-            # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
-            for parent in self.suspicious_parents_dict['MostSuspiciousParents']:
-                if parent in process.parent_path:
-                    risk_score += 3
-                    report_lines.append('* **Suspicious Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
-                    report_lines.append(f'  * **Executable**: {parent}\n')
-                    report_lines.append(f'  * **PPID**: {process.parent_pid}\n')
-                    report_lines.append(f'  * **Command Line**: {process.parent_command_line}\n')
-                    break
+        # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
+        check_parents_dict = self.parents_dict['SuspiciousForTerminal'] if process.name in most_suspicious_programs else self.parents_dict['GeneralSuspicious']
+        parents = all_suspicious_programs 
+        for parent in check_parents_dict:
+            if parent.lower() == process.parent_name.lower():
+                risk_score += 3
+                report_lines.append('* **Strange Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
+                report_lines.append(f'  * **Executable**: {parent}\n')
+                report_lines.append(f'  * **PPID**: {process.parent_pid}\n')
+                report_lines.append(f'  * **Command Line**: {process.parent_command_line}\n')
+                break
+
+        # Calculates risk score and risk level classification
         if risk_score > 0:
             report_lines.append('## Conclusion\n')
             report_lines.append(f'* **Score**: {risk_score}\n')
@@ -145,7 +170,6 @@ class SysmonMonitor:
             else:
                 report_lines.append('Very high risk. Classified as attack trail. Requires imediate investigation and system hardening.\n')
             
-
 
             report_lines.insert(0, f'## Suspicious Activity\n')
             report_lines.insert(0, f'**Creation Time**: {process.opening_time}\n')
@@ -162,16 +186,18 @@ class SysmonMonitor:
         pass
 
 
-if __name__ == 'main':
+if __name__ == '__main__':
     print('''
+    You won't go far unnoticed
     ██████╗ ██████╗   ██████╗   ██████╗      ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗
     ██╔══██╗██╔══██╗ ██╔═══██╗ ██╔════╝      ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║
     ██████╔╝██████╔╝ ██║   ██║ ██║           ██║ █╗ ██║███████║   ██║   ██║     ███████║
     ██╔═══╝ ██╔══██╗ ██║   ██║ ██║           ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║
     ██║     ██║  ██║ ╚██████╔╝ ╚██████╗      ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║
     ╚═╝     ╚═╝  ╚═╝  ╚═════╝   ╚═════╝       ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
+                                                                    by Rodrigo Soares
     ''')
-    sm = SysmonMonitor()
+    sm = SysmonMonitor('./report.md')
 
     try:
         while True:
