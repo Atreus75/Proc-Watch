@@ -1,10 +1,13 @@
+## 🇧🇷 Resumo (PT-BR)
+O ProcWatch é um monitor de processos em tempo real baseado em Sysmon, 
+focado em detectar comportamento suspeito usando análise contextual e heurísticas de SOC.
+
+<br><br>
+
 # 🛡️ ProcWatch
 
 Real-time process monitoring tool based on Sysmon events, focused on detecting suspicious behavior.
 
-## 🇧🇷 Resumo (PT-BR)
-O ProcWatch é um monitor de processos em tempo real baseado em Sysmon, 
-focado em detectar comportamento suspeito usando análise contextual e heurísticas de SOC.
 ---
 
 ## Overview
