@@ -13,15 +13,50 @@
                 "nc.exe",
                 "nc64.exe"
             ]
-        }
+        },
+        "SecurityCritical": [
+            "MsMpEng.exe",
+            "NisSrv.exe",
+            "SecurityHealthService.exe",
+            "SenseCE.exe",
+            "SenseCM.exe",
+            "SenseIR.exe",
+            "SenseNdr.exe",
+            "SenseSampleUploader.exe",
+            "SenseScheduler.exe",
+            "MpDlpService.exe",
+            "MpEngine.exe",
+            "MpRTP.exe",
+            "MpSvc.exe",
+            "WdNisSvc.exe",
+            "mssense.exe",
+            "mssenseworker.exe",
+            "mssenseuploader.exe"
+        ]
     },
-    "Explainings" : {
-        "certutil.exe" : "Security certifications installer.",
-        "powershell.exe" : "System advanced command prompt. Can be used to run, install and hide malware.",
-        "cmd.exe" : "System command prompt. Can be used to run, install and hide malware.",
-        "nmap.exe" : "Port and network scanner. Can be used to map the target machine's network and make lateral movements.",
-        "nc.exe" : "TCP connections tool. Can be used to make connections between a victim and the attacker.",
-        "nc64.exe" : "TCP connections tool. Can be used as to make connections between a victim and the attacker."
+    "Explainings": {
+        "certutil.exe": "Security certifications installer.",
+        "powershell.exe": "System advanced command prompt. Can be used to run, install and hide malware.",
+        "cmd.exe": "System command prompt. Can be used to run, install and hide malware.",
+        "nmap.exe": "Port and network scanner. Can be used to map the target machine's network and make lateral movements.",
+        "nc.exe": "TCP connections tool. Can be used to make connections between a victim and the attacker.",
+        "nc64.exe": "TCP connections tool. Can be used as to make connections between a victim and the attacker.",
+        "MsMpEng.exe": "Core Windows Defender antivirus engine. Runs continuously in real-time to detect and block malware.",
+        "NisSrv.exe": "Network Inspection Service. Monitors network traffic for exploit attempts and malicious connections.",
+        "SecurityHealthService.exe": "Windows Security Center service. Monitors antivirus, firewall, and overall system health status.",
+        "SenseCE.exe": "Microsoft Defender for Endpoint component. Handles endpoint detection and response (EDR) capabilities.",
+        "SenseCM.exe": "Microsoft Defender for Endpoint configuration manager. Manages security policy enforcement.",
+        "SenseIR.exe": "Microsoft Defender for Endpoint incident response. Handles automated investigation and remediation.",
+        "SenseNdr.exe": "Microsoft Defender for Endpoint network detection. Analyzes network traffic for threats.",
+        "SenseSampleUploader.exe": "Uploads suspicious file samples to Microsoft cloud for advanced analysis.",
+        "SenseScheduler.exe": "Manages scheduled tasks for Microsoft Defender for Endpoint telemetry and scans.",
+        "MpDlpService.exe": "Data Loss Prevention service. Prevents unauthorized exfiltration of sensitive data.",
+        "MpEngine.exe": "Windows Defender antimalware scanning engine. Executes signature-based and heuristic detection.",
+        "MpRTP.exe": "Real-time protection module. Monitors file system, registry, and process activity continuously.",
+        "MpSvc.exe": "Windows Defender service host. Coordinates all antivirus and antimalware operations.",
+        "WdNisSvc.exe": "Windows Defender Network Inspection Service. Detects network-based exploits and intrusions.",
+        "mssense.exe": "Microsoft Defender for Endpoint sensor. Collects telemetry and behavioral data from the system.",
+        "mssenseworker.exe": "Worker process for Defender sensor. Handles data processing and event correlation.",
+        "mssenseuploader.exe": "Uploads telemetry and detected threat data to Microsoft Defender for Endpoint cloud."
     }
-    
-}
+}   
