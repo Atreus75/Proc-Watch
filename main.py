@@ -4,15 +4,17 @@ from json import load
 import time
 from subprocess import run
 from argparse import ArgumentParser
+from os import getpid
+
 
 class ProcessInfo:
     def __init__(self, name='', bin_path='', current_directory='', command_line='', pid=0, opening_time='', user='', parent_path='', parent_command_line='', ppid=0):
         self.name = name
         self.bin_path = bin_path
         self.current_directory = current_directory
-        self.pid = pid
+        self.pid = int(pid)
         self.parent_path = parent_path
-        self.parent_pid = ppid
+        self.parent_pid = int(ppid)
         self.command_line = command_line
         self.parent_command_line = parent_command_line
         self.parent_name = ''
@@ -35,6 +37,7 @@ class SysmonMonitor:
             5: 'Process Terminated'
         }
         self.query = "*"
+        self.current_pid = getpid()
         
         # Opening rule files
         parents_file = open('./rules/parents.json', 'r')
@@ -84,16 +87,24 @@ class SysmonMonitor:
                         parent_command_line=event_dict['Event']['EventData']['Data'][21]['#text'],
                         ppid=event_dict['Event']['EventData']['Data'][19]['#text']
                     )
-                    # Proceeds to use SOC rules to detect a malicious context in a process creation
-                    self.processCreationChecks(process)
-                    
-                    # Printing general logs
-                    print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
-                    print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
+                    # Skip processes created by ProcWatch, in order to keep the report as cleaner as possible
+                    if self.current_pid != process.pid and self.current_pid != process.parent_pid:
+                        # Proceeds to use SOC rules to detect a malicious context in a process creation
+                        self.processCreationChecks(process)
+                        
+                        # Printing general logs
+                        print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
+                        print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
+
                 case 5:
-                    # WIP
+                    process = ProcessInfo(
+                        bin_path=event_dict['Event']['EventData']['Data'][4]['#text']
+                    )
+                    self.processTerminationChecks(process)
+
                     print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
+                    
                 case _:
                     print(f'[!] Not Identified Event ID: {event_id}')
             
@@ -130,7 +141,7 @@ class SysmonMonitor:
                 [
                     "powershell", 
                     "-Command", 
-                    r"Get-LocalGroup | ForEach-Object { $group = $_; Get-LocalGroupMember -Group $group.Name -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*\Lenovo' } | ForEach-Object { $group.Name } } | Select-Object -Unique"
+                    "Get-LocalGroup | ForEach-Object { $group = $_; Get-LocalGroupMember -Group $group.Name -ErrorAction SilentlyContinue | Where-Object { $_.Name -like '*\\" + process.user + "' } | ForEach-Object { $group.Name } } | Select-Object -Unique"
                 ],
                 capture_output=True, text=True
             ).stdout
@@ -146,12 +157,11 @@ class SysmonMonitor:
                     report_lines.append(f'  * {group.capitalize()}\n')
 
         # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
-        check_parents_dict = self.parents_dict['SuspiciousForTerminal'] if process.name in most_suspicious_programs else self.parents_dict['GeneralSuspicious']
-        parents = all_suspicious_programs 
+        check_parents_dict = self.parents_dict['SuspiciousForTerminal'] if process.name in self.programs_dict['Names']['MostSuspicious']['Terminals'] else self.parents_dict['GeneralSuspicious']
         for parent in check_parents_dict:
             if parent.lower() == process.parent_name.lower():
                 risk_score += 3
-                report_lines.append('* **Strange Parent-Child Relation**: The process was started by an unexpected parent. A malware can be trying to seem a legitim program.\n')
+                report_lines.append('* **Strange Parent-Child Relation**: The process was started by an dangerous parent. It is possible that a malware can be+ trying to seem a legitim program.\n')
                 report_lines.append(f'  * **Executable**: {parent}\n')
                 report_lines.append(f'  * **PPID**: {process.parent_pid}\n')
                 report_lines.append(f'  * **Command Line**: {process.parent_command_line}\n')
@@ -166,9 +176,9 @@ class SysmonMonitor:
             elif risk_score < 7:
                 report_lines.append('Medium risk event. Classified as potential malicious activity. It requires attention to future event correlations.\n')
             elif risk_score < 10:
-                report_lines.append('High risk. Classified as malicious activity. This event requires imediate investigation.\n')
+                report_lines.append('High risk. Classified as attack indicator. This event requires imediate investigation.\n')
             else:
-                report_lines.append('Very high risk. Classified as attack trail. Requires imediate investigation and system hardening.\n')
+                report_lines.append('Very high risk. Classified as **strong** attack indicator. Requires imediate investigation and system hardening.\n')
             
 
             report_lines.insert(0, f'## Suspicious Activity\n')
@@ -179,26 +189,59 @@ class SysmonMonitor:
             report_lines.insert(0, f'## Main Information:\n')
             report_lines.insert(0, f'# Process Creation\n')
             report_file.writelines(report_lines)
-            report_file.close()
         report_file.close()
     
     def processTerminationChecks(self, process):
-        pass
-
+        report_file = open(self.report_path, 'a+')
+        risk_score = 0
+        report_lines = list()
+        for char in process.bin_path[::-1]:
+            if char == '\\':
+                break
+            process.name += char
+        process.name = process.name[::-1]
+        # Checks weather the process is a security critical one
+        if process.name.lower() in self.programs_dict['Names']['SecurityCritical']:
+            risk_score += 4
+            report_lines.append('# Process Termination\n')
+            report_lines.append('## Main Information\n')
+            report_lines.append(f'* Executable: {process.name.lower()}\n')
+            report_lines.append(f'* Executable Path: {process.bin_path}\n')
+            report_lines.append(f'* Criticality: {self.programs_dict["Explainings"][process.name.lower()]}\n')            
+        if report_lines:
+            report_file.writelines(report_lines)
+        report_file.close()
 
 if __name__ == '__main__':
-    print('''
-    You won't go far unnoticed
-    ██████╗ ██████╗   ██████╗   ██████╗      ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗
-    ██╔══██╗██╔══██╗ ██╔═══██╗ ██╔════╝      ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║
-    ██████╔╝██████╔╝ ██║   ██║ ██║           ██║ █╗ ██║███████║   ██║   ██║     ███████║
-    ██╔═══╝ ██╔══██╗ ██║   ██║ ██║           ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║
-    ██║     ██║  ██║ ╚██████╔╝ ╚██████╗      ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║
-    ╚═╝     ╚═╝  ╚═╝  ╚═════╝   ╚═════╝       ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
-                                                                    by Rodrigo Soares
-    ''')
-    sm = SysmonMonitor('./report.md')
+    parser = ArgumentParser(
+        description='A system security monitor prototype',
+        prog='procwatch.py',
+        epilog='They won\'t go far unnoticed',
+        add_help=True
+    )
+    parser.add_argument('-r', '--reportPath', default='./report.md', help='The path to write the complete report markdown file. Ex: C:\\....\\report.md')
+    args = parser.parse_args()
 
+    try:
+        report_file = open(args.reportPath, 'a+')
+        report_file.close()
+    except:
+        print(f'[-] Error while writing the report at {args.reportPath}\n')
+        print('Check your permissions and the existence of the directory.')
+        exit()
+
+    print('''
+    They won't go far unnoticed
+    ██████╗ ██████╗   ██████╗   ██████╗ ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗
+    ██╔══██╗██╔══██╗ ██╔═══██╗ ██╔════╝ ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║
+    ██████╔╝██████╔╝ ██║   ██║ ██║      ██║ █╗ ██║███████║   ██║   ██║     ███████║
+    ██╔═══╝ ██╔══██╗ ██║   ██║ ██║      ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║
+    ██║     ██║  ██║ ╚██████╔╝ ╚██████╗ ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║
+    ╚═╝     ╚═╝  ╚═╝  ╚═════╝   ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
+                                                        by Rodrigo Soares Ferreira
+    ''')
+    
+    sm = SysmonMonitor(args.reportPath)
     try:
         while True:
             time.sleep(1)
