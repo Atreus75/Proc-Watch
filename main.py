@@ -4,7 +4,7 @@ from json import load
 import time
 from subprocess import run
 from argparse import ArgumentParser
-from os import getpid
+from os import getpid, listdir
 
 
 class ProcessInfo:
@@ -110,18 +110,17 @@ class SysmonMonitor:
             
 
     def processCreationChecks(self, process=ProcessInfo()):
-        report_file = open(self.report_path, 'a+')
         report_lines = list()
         
         risk_score = 0 
 
-        # Checks if its a known risky tool
+        # Executes checks for dangerous executables
         all_suspicious_programs = self.programs_dict['Names']['Suspicious']+self.programs_dict['Names']['MostSuspicious']['Terminals']+self.programs_dict['Names']['MostSuspicious']['Network']
         most_suspicious_programs = self.programs_dict['Names']['MostSuspicious']['Terminals']+self.programs_dict['Names']['MostSuspicious']['Network']
         if process.name in all_suspicious_programs:
             risk_score += 3
-            report_lines.append(f'* **Suspicious Executable**: \n')
-            report_lines.append(f'  * **{process.name}**: {self.programs_dict["Explainings"][process.name]}\n')
+            report_lines.append(f'* **Suspicious Executable**: ')
+            report_lines.append(f'  * **{process.name}**: {self.programs_dict["Explainings"][process.name]}')
             # Checks if its a known attack tool
             if process.name in most_suspicious_programs:
                 risk_score += 3
@@ -132,11 +131,11 @@ class SysmonMonitor:
                         flags.append(flag)
                 if flags:
                     risk_score += 3
-                    report_lines.append('* **Attack Convenient Flags**: \n')
+                    report_lines.append('* **Attack Convenient Flags**: ')
                     for flag in flags:
-                        report_lines.append(f'  * **{flag}**: {self.flags_dict["Explainings"][process.name][flag]}\n')
+                        report_lines.append(f'  * **{flag}**: {self.flags_dict["Explainings"][process.name][flag]}')
             
-            # Detects high-autority users spawning processes
+            # Detects if the process was started by a high-priviledged user
             user_groups = run(
                 [
                     "powershell", 
@@ -152,47 +151,36 @@ class SysmonMonitor:
                     break
             if priviledged_groups:
                 risk_score += 3
-                report_lines.append('* **Highly Privileged User Groups**: \n')
+                report_lines.append('* **Highly Privileged User Groups**: ')
                 for group in priviledged_groups:
-                    report_lines.append(f'  * {group.capitalize()}\n')
+                    report_lines.append(f'  * {group.capitalize()}')
 
         # Detects strange parent-child relations (Ex: Microsoft Word starting a Powershell process)
         check_parents_dict = self.parents_dict['SuspiciousForTerminal'] if process.name in self.programs_dict['Names']['MostSuspicious']['Terminals'] else self.parents_dict['GeneralSuspicious']
         for parent in check_parents_dict:
             if parent.lower() == process.parent_name.lower():
                 risk_score += 3
-                report_lines.append('* **Strange Parent-Child Relation**: The process was started by an dangerous parent. It is possible that a malware can be+ trying to seem a legitim program.\n')
-                report_lines.append(f'  * **Executable**: {parent}\n')
-                report_lines.append(f'  * **PPID**: {process.parent_pid}\n')
-                report_lines.append(f'  * **Command Line**: {process.parent_command_line}\n')
+                report_lines.append('* **Strange Parent-Child Relation**: The process was started by a dangerous parent. It is possible that a malware can be trying to seem a legitim program.')
+                report_lines.append(f'  * **Executable**: {parent}')
+                report_lines.append(f'  * **PPID**: {process.parent_pid}')
+                report_lines.append(f'  * **Command Line**: {process.parent_command_line}')
                 break
 
         # Calculates risk score and risk level classification
         if risk_score > 0:
-            report_lines.append('## Conclusion\n')
-            report_lines.append(f'* **Score**: {risk_score}\n')
-            if risk_score < 4:
-                report_lines.append('Low risk. Classified as uncommon (but not necessairily malicious) activity. Alone, this event may not require further investigation.\n')
-            elif risk_score < 7:
-                report_lines.append('Medium risk event. Classified as potential malicious activity. It requires attention to future event correlations.\n')
-            elif risk_score < 10:
-                report_lines.append('High risk. Classified as attack indicator. This event requires imediate investigation.\n')
-            else:
-                report_lines.append('Very high risk. Classified as **strong** attack indicator. Requires imediate investigation and system hardening.\n')
-            
+            self.riskScoreAvaliate(risk_score, report_lines)
 
-            report_lines.insert(0, f'## Suspicious Activity\n')
-            report_lines.insert(0, f'**Creation Time**: {process.opening_time}\n')
-            report_lines.insert(0, f'**PID**: {process.pid}\n')
-            report_lines.insert(0, f'**Command Line**: {process.command_line}\n')
-            report_lines.insert(0, f'**Executable:** {process.name}\n')
-            report_lines.insert(0, f'## Main Information:\n')
-            report_lines.insert(0, f'# Process Creation\n')
-            report_file.writelines(report_lines)
-        report_file.close()
+            report_lines.insert(0, f'## Suspicious Activity')
+            report_lines.insert(0, f'**Creation Time**: {process.opening_time}')
+            report_lines.insert(0, f'**PID**: {process.pid}')
+            report_lines.insert(0, f'**Command Line**: {process.command_line}')
+            report_lines.insert(0, f'**Executable:** {process.name}')
+            report_lines.insert(0, f'## Main Information:')
+            report_lines.insert(0, f'# Process Creation')
+            with open(self.report_path, 'a+') as report_file:
+                report_file.write('\r\n'.join(report_lines) + '\r\n')
     
     def processTerminationChecks(self, process):
-        report_file = open(self.report_path, 'a+')
         risk_score = 0
         report_lines = list()
         for char in process.bin_path[::-1]:
@@ -203,14 +191,28 @@ class SysmonMonitor:
         # Checks weather the process is a security critical one
         if process.name.lower() in self.programs_dict['Names']['SecurityCritical']:
             risk_score += 4
-            report_lines.append('# Process Termination\n')
-            report_lines.append('## Main Information\n')
-            report_lines.append(f'* Executable: {process.name.lower()}\n')
-            report_lines.append(f'* Executable Path: {process.bin_path}\n')
-            report_lines.append(f'* Criticality: {self.programs_dict["Explainings"][process.name.lower()]}\n')            
-        if report_lines:
-            report_file.writelines(report_lines)
-        report_file.close()
+            report_lines.append('# Process Termination')
+            report_lines.append('## Main Information')
+            report_lines.append(f'* Executable: {process.name.lower()}')
+            report_lines.append(f'* Executable Path: {process.bin_path}')
+            report_lines.append(f'* Criticality: {self.programs_dict["Explainings"][process.name.lower()]}')            
+        if risk_score > 0:
+            self.riskScoreAvaliate(risk_score, report_lines)
+            with open(self.report_path, 'a+') as report_file:
+                report_file.write('\r\n'.join(report_lines) + '\r\n')
+
+    def riskScoreAvaliate(self, risk_score=0, report_lines=[]):
+        report_lines.append('## Conclusion')
+        report_lines.append(f'* **Score**: {risk_score}. ')
+        if risk_score < 4:
+            report_lines.append('Low risk. Classified as uncommon (but not necessairily malicious) activity. Alone, this event may not require further investigation.')
+        elif risk_score < 7:
+            report_lines.append('Medium risk event. Classified as potential malicious activity. It requires attention to future event correlations.')
+        elif risk_score < 10:
+            report_lines.append('High risk. Classified as attack indicator. This event requires imediate investigation.')
+        else:
+            report_lines.append('Very high risk. Classified as **strong** attack indicator. Requires imediate investigation and system hardening.')
+        report_lines.append('')
 
 if __name__ == '__main__':
     parser = ArgumentParser(
@@ -226,7 +228,7 @@ if __name__ == '__main__':
         report_file = open(args.reportPath, 'a+')
         report_file.close()
     except:
-        print(f'[-] Error while writing the report at {args.reportPath}\n')
+        print(f'[-] Error while writing the report at {args.reportPath}')
         print('Check your permissions and the existence of the directory.')
         exit()
 
@@ -246,4 +248,4 @@ if __name__ == '__main__':
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print('[+] Terminating.\n\n')
+        print('[+] Terminating.')
