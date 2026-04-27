@@ -7,10 +7,8 @@ Real-time process monitoring tool based on Sysmon events, focused on detecting s
 ## Overview
 
 ProcWatch listens to Windows Sysmon logs and analyzes process creation events to identify potentially malicious activity.
-
 The approach is straightforward: observe process execution, evaluate context, and assign a risk score.
 
----
 
 ## How it works
 
@@ -22,7 +20,7 @@ The approach is straightforward: observe process execution, evaluate context, an
 * Assigns a risk score
 * Writes findings to a report file
 
----
+
 
 ## Detection logic
 
@@ -60,7 +58,7 @@ Each event is scored based on context:
 
 * **1–3** → uncommon
 * **4–6** → suspicious
-* **7–9** → malicious
+* **7–9** → attack indicator
 * **10+** → strong attack indicator
 
 ---
@@ -73,7 +71,6 @@ Relevant events are written to `report.md`, including:
 * Detection reasons
 * Risk classification
 
----
 
 ## Rule system
 
