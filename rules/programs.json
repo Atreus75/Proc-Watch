@@ -6,7 +6,9 @@
         "MostSuspicious": {
             "Terminals": [
                 "powershell.exe",
-                "cmd.exe"
+                "cmd.exe",
+                "OpenConsole.exe",
+                "WindowsTerminal.exe"
             ],
             "Network" : [
                 "nmap.exe",
@@ -57,6 +59,8 @@
         "WdNisSvc.exe": "Windows Defender Network Inspection Service. Detects network-based exploits and intrusions.",
         "mssense.exe": "Microsoft Defender for Endpoint sensor. Collects telemetry and behavioral data from the system.",
         "mssenseworker.exe": "Worker process for Defender sensor. Handles data processing and event correlation.",
-        "mssenseuploader.exe": "Uploads telemetry and detected threat data to Microsoft Defender for Endpoint cloud."
+        "mssenseuploader.exe": "Uploads telemetry and detected threat data to Microsoft Defender for Endpoint cloud.",
+        "OpenConsole.exe" : "Opens the Windows console.",
+        "WindowsTerminal.exe" : "Opens the modern Windows Terminal interface."
     }
 }   
