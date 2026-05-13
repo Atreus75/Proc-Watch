@@ -1,8 +1,8 @@
 import win32evtlog
 import xmltodict
-import time
-import pickle
-from train_model import Trainer, ProcessInfo
+from time import sleep, time
+from pickle import load as pickleLoad
+from train_model import Trainer, ProcessInfo, ModelSave
 from json import load
 from subprocess import run
 from argparse import ArgumentParser
@@ -14,7 +14,7 @@ class SysmonMonitor:
         self.event_ids = {
             1: 'Process Create',
             2: 'File Creation Time Modification',
-            5: 'Process Terminated'
+            7: 'Image Load'
         }
         self.query = "*"
         self.current_pid = getpid()
@@ -35,10 +35,14 @@ class SysmonMonitor:
         programs_file.close()
         users_and_groups_file.close()
 
-        # Loading ML model
+        # Loading ModelSave object
         if self.activate_model:
             with open('model.pkl', 'rb') as f:
-                self.model = pickle.load(f)
+                self.model_save = pickleLoad(f)
+            print(f'[+] MACHINE LEARNING MODEL ACTIVATED --> Train date: {self.model_save.timestamp} | Train Duration: {self.model_save.train_duration} hours\n   OBS: It\'s recommended to keep your model trains as recent and large as possible.\n')
+        if self.train_model:
+            self.training_data = []
+
 
         # Event subscribing SysmonMonitor.callback as the callback function to the Sysmon event log
         self.subscription = win32evtlog.EvtSubscribe(
@@ -63,9 +67,9 @@ class SysmonMonitor:
             match event_id:
                 case 1:
                     process = ProcessInfo(
+                        event_id=event_id,
                         name=event_dict['Event']['EventData']['Data'][9]['#text'].lower(),
                         bin_path=event_dict['Event']['EventData']['Data'][4]['#text'],
-                        current_directory=event_dict['Event']['EventData']['Data'][11]['#text'],
                         command_line=event_dict['Event']['EventData']['Data'][10]['#text'],
                         pid=event_dict['Event']['EventData']['Data'][3]['#text'],
                         opening_time=event_dict['Event']['EventData']['Data'][1]['#text'],
@@ -83,17 +87,20 @@ class SysmonMonitor:
                         print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                         print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                         if self.train_model:
-                            Trainer().saveTrainingData(Trainer().extractProcessFeature(process))
+                            feature = Trainer().extractProcessFeature(process)
+                            self.training_data.append(feature)
                 case 5:
                     process = ProcessInfo(
+                        event_id=event_id,
                         bin_path=event_dict['Event']['EventData']['Data'][4]['#text']
                     )
                     self.processTerminationChecks(process)
                     if self.train_model:
-                        Trainer().saveTrainingData(Trainer().extractProcessFeature(process))
+                        feature = Trainer().extractProcessFeature(process)
+                        self.training_data.append(feature)
                     print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                     print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
-                    
+                
                 case _:
                     print(f'[!] Not Identified Event ID: {event_id}')
             
@@ -163,7 +170,7 @@ class SysmonMonitor:
             if self.activate_model:
                 # Decreases the risk score if the event is a part of the system common routine, and increses it if the event is considered anomalous
                 features = Trainer().extractProcessFeature(process)
-                prediction = self.model.predict([features])[0]
+                prediction = self.model_save.model.predict([features])[0]
                 anomalous_behavior = prediction == -1
                 if 1 < risk_score < 4:
                     risk_score += 3 if prediction == -1 else -risk_score
@@ -206,6 +213,10 @@ class SysmonMonitor:
             with open(self.report_path, 'a+') as report_file:
                 report_file.write('\r\n'.join(report_lines) + '\r\n')
 
+    def processConnection(self, process):
+        risk_score = 0
+        report_lines = []
+
     def riskScoreAvaliate(self, risk_score=0, report_lines=[], ml_detection=False):
         report_lines.append('## Conclusion')
         if ml_detection:
@@ -223,6 +234,8 @@ class SysmonMonitor:
 
 
 if __name__ == '__main__':
+    start_time = time()
+
     parser = ArgumentParser(
         description='A system security monitor prototype',
         prog='procwatch.py',
@@ -263,10 +276,13 @@ if __name__ == '__main__':
     sm = SysmonMonitor(args.reportPath, args.train_model, args.activate_model)
     try:
         while True:
-            time.sleep(1)
+            sleep(1)
     except KeyboardInterrupt:
         if args.train_model:
-            print('\n\n[+] Training ML model. Please, wait.')
+            print('\n\n[+] Training ML model. Please, wait. Interrupting can trigger a corruption in the model save.')
+            final_time = time()
+            training_duration = float(final_time-start_time)
+            Trainer().saveTrainingData(sm.training_data, training_duration)
             Trainer().trainAndSave()
-            print('[+] Model saved in model.pkl')
+            print('[+] Model successfully saved in model.pkl')
         print('[+] Terminating.')
