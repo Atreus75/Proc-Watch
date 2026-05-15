@@ -43,7 +43,7 @@ class SysmonMonitor:
                     f'\n[ ML MODEL ]\n'
                     f'  Loaded successfully\n'
                     f'  Training Date   : {self.model_save.timestamp}\n'
-                    f'  Training Window : {float(self.model_save.train_duration):.2F} hours\n'
+                    f'  Training Window : {float(self.model_save.train_window):.2F} hours\n'
                     f'  Note            : Recent and diverse training data improves anomaly detection.\n'
                 )
         if self.train_model:
