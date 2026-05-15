@@ -1,8 +1,8 @@
-import win32evtlog
-import xmltodict
+from win32evtlog import EvtSubscribe, EvtSubscribeToFutureEvents, EvtSubscribeActionDeliver, EvtRender, EvtRenderEventXml
+from xmltodict import parse
 from time import sleep, time
 from pickle import load as pickleLoad
-from train_model import Trainer, ProcessInfo, ModelSave
+from train_model import Trainer, ProcessInfo
 from json import load
 from subprocess import run
 from argparse import ArgumentParser
@@ -39,24 +39,31 @@ class SysmonMonitor:
         if self.activate_model:
             with open('model.pkl', 'rb') as f:
                 self.model_save = pickleLoad(f)
-            print(f'[+] MACHINE LEARNING MODEL ACTIVATED --> Train date: {self.model_save.timestamp} | Train Duration: {self.model_save.train_duration} hours\n   OBS: It\'s recommended to keep your model trains as recent and large as possible.\n')
+                print(
+                    f'\n[ ML MODEL ]\n'
+                    f'  Loaded successfully\n'
+                    f'  Training Date   : {self.model_save.timestamp}\n'
+                    f'  Training Window : {float(self.model_save.train_duration):.2F} hours\n'
+                    f'  Note            : Recent and diverse training data improves anomaly detection.\n'
+                )
         if self.train_model:
             self.training_data = []
 
 
         # Event subscribing SysmonMonitor.callback as the callback function to the Sysmon event log
-        self.subscription = win32evtlog.EvtSubscribe(
+        self.subscription = EvtSubscribe(
             ChannelPath="Microsoft-Windows-Sysmon/Operational",
-            Flags=win32evtlog.EvtSubscribeToFutureEvents,
+            Flags=EvtSubscribeToFutureEvents,
             Query=self.query,
             Callback=self.callback
         )
 
+        print('[ WAITING EVENTS ]\n')
 
     def callback(self, action, context, event):
-        if action == win32evtlog.EvtSubscribeActionDeliver:
-            event_str_xml = win32evtlog.EvtRender(event, win32evtlog.EvtRenderEventXml)
-            event_dict = xmltodict.parse(event_str_xml)
+        if action == EvtSubscribeActionDeliver:
+            event_str_xml = EvtRender(event, EvtRenderEventXml)
+            event_dict = parse(event_str_xml)
             self.treatEvent(event_dict)
     
     def treatEvent(self, event_dict=dict()):
@@ -86,20 +93,20 @@ class SysmonMonitor:
                         # Printing general logs
                         print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
                         print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
-                        if self.train_model:
-                            feature = Trainer().extractProcessFeature(process)
-                            self.training_data.append(feature)
+                    if self.train_model:
+                        feature = Trainer().extractProcessFeature(process)
+                        self.training_data.append(feature)
                 case 5:
                     process = ProcessInfo(
                         event_id=event_id,
                         bin_path=event_dict['Event']['EventData']['Data'][4]['#text']
                     )
                     self.processTerminationChecks(process)
+                    print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
+                    print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                     if self.train_model:
                         feature = Trainer().extractProcessFeature(process)
                         self.training_data.append(feature)
-                    print(f'    Binary Path: {event_dict["Event"]["EventData"]["Data"][4]["#text"]}')
-                    print(f'    PID: {event_dict["Event"]["EventData"]["Data"][3]["#text"]}')
                 
                 case _:
                     print(f'[!] Not Identified Event ID: {event_id}')
@@ -265,6 +272,7 @@ if __name__ == '__main__':
     ╚═╝     ╚═╝  ╚═╝  ╚═════╝   ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝
                                                         by Rodrigo Soares Ferreira
     ''')
+    
     if args.activate_model:
         try:
             # Checks if the training_data.txt file exists and is readable in the current folder
@@ -279,7 +287,12 @@ if __name__ == '__main__':
             sleep(1)
     except KeyboardInterrupt:
         if args.train_model:
-            print('\n\n[+] Training ML model. Please, wait. Interrupting can trigger a corruption in the model save.')
+            print(
+                '\n\n[ ML TRAINING ]\n'
+                '  Model training started.\n'
+                '  Please wait and do not interrupt this process.\n'
+                '  Interrupting may corrupt the saved model.\n'
+            )
             final_time = time()
             training_duration = float(final_time-start_time)
             Trainer().saveTrainingData(sm.training_data, training_duration)
