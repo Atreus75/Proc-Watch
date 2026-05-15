@@ -4,15 +4,15 @@ from os import path
 import pickle
 
 class ModelSave:
-    def __init__(self, model, timestamp, train_duration):
+    def __init__(self, model, timestamp, train_window):
         '''
             model: IsolationForest model
             timestamp: dd-mm-yyyy. Example: 20-05-2026
-            train_duration: hours.seconds Example: 43.5  
+            train_window: hours.seconds Example: 43.5  
         '''
         self.model = model
         self.timestamp = date.fromisoformat(timestamp.replace('\n', ''))
-        self.train_duration = train_duration
+        self.train_window = train_window
 
 class ProcessInfo:
     def __init__(self, name='', bin_path='', command_line='', pid=0, opening_time='', user='', parent_path='', parent_command_line='', ppid=0, event_id=1):
@@ -90,26 +90,26 @@ class Trainer:
         '''Trains the Isolation Forest model and saves it inside a file named model.pkl, in the current directory.'''
         train_data = self.extractFileFeatures()
         timestamp = train_data[0]
-        train_duration = train_data[1]
+        train_window = train_data[1]
         features = train_data[2]
         model = IsolationForest(
             n_estimators=100,
             contamination=0.05,
             random_state=42
         )
-        model_save = ModelSave(model, timestamp, train_duration)
+        model_save = ModelSave(model, timestamp, train_window)
 
         model_save.model.fit(features)
         with open('model.pkl', 'wb+') as file:
             pickle.dump(model_save, file)
 
-    def saveTrainingData(self, features=[], duration=0.0):
-        past_duration = 0.0
+    def saveTrainingData(self, features=[], window=0.0):
+        past_window = 0.0
         past_content = []
         if path.exists('train_data.txt'):
             with open('train_data.txt', 'r') as f:
                 past_content = f.readlines()
-                past_duration = float(past_content[1])
+                past_window = float(past_content[1])
             past_content = past_content[2:]
 
         for c in range(0, len(features)):
@@ -119,10 +119,10 @@ class Trainer:
         month = '0' + str(now.month) if now.month < 10 else str(now.month) 
 
         current_date = f'{now.year}-{month}-{day}\n'
-        current_duration = f'{past_duration+duration/(60*60):.3f}\n'
-        full_content = [current_date, current_duration]+past_content+features
+        current_window = f'{past_window+window/(60*60):.3f}\n'
+        full_content = [current_date, current_window]+past_content+features
 
-        with open('training_data.txt', 'a+') as f:
+        with open('training_data.txt', 'w') as f:
             f.writelines(full_content)
 
 if __name__ == '__main__':
